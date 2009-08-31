@@ -6,7 +6,13 @@ class Dovecot <Formula
   @md5='3e5717d13e3d6b32d3f4b809df397dbf'
 
   def install
-    system "./configure --prefix='#{prefix}' --disable-debug --disable-dependency-tracking --sysconfdir='#{prefix}/etc' --localstatedir='#{prefix}/var' --with-ssl=openssl --with-ioloop=kqueue"
+    system "./configure", "--prefix=#{prefix}",
+                          "--disable-debug",
+                          "--disable-dependency-tracking",
+                          "--sysconfdir=#{prefix}/etc",
+                          "--localstatedir=#{prefix}/var",
+                          "--with-ssl=openssl",
+                          "--with-ioloop=kqueue"
     system "make install"
 
     # TODO: automate some of the caveats?
@@ -15,7 +21,11 @@ class Dovecot <Formula
   def caveats
     puts <<-EOS
 ==============================================================
+<<<<<<< HEAD
 For dovecot to work, you will need to do the following:
+=======
+For Dovecot to work, you will need to do the following:
+>>>>>>> 491cd8feeb7f07656f71defaa3a57260eeb52704
 
 1) create configuration in #{prefix}/etc
 
@@ -38,6 +48,6 @@ For dovecot to work, you will need to do the following:
 </dict>
 </plist>
 ==============================================================
-EOS
+    EOS
   end
 end
