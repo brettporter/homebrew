@@ -21,11 +21,7 @@ class Dovecot <Formula
   def caveats
     puts <<-EOS
 ==============================================================
-<<<<<<< HEAD
-For dovecot to work, you will need to do the following:
-=======
 For Dovecot to work, you will need to do the following:
->>>>>>> 491cd8feeb7f07656f71defaa3a57260eeb52704
 
 1) create configuration in #{prefix}/etc
 
