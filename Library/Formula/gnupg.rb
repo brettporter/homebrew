@@ -11,10 +11,11 @@ class Gnupg <Formula
     system "make"
     system "make check"
 
-    # not sure what is happening here, but it fails if this isn't done first
-    system "mkdir #{prefix}/bin"
-    system "mkdir -p #{prefix}/libexec/gnupg"
-
+    # amazingly even the GNU folks can bugger up their Makefiles, so we need
+    # to create this directories because the install target has the dependency
+    # order wrong
+    bin.mkpath
+    (libexec+'gnupg').mkpath
     system "make install"
   end
 end
