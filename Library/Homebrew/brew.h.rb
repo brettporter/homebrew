@@ -94,7 +94,8 @@ end
 def info name
   require 'formula'
 
-  user=`git config --global github.user`.chomp
+  user=''
+  user=`git config --global github.user`.chomp if system "which git > /dev/null"
   user='mxcl' if user.empty?
   # FIXME it would be nice if we didn't assume the default branch is masterbrew
   history="http://github.com/#{user}/homebrew/commits/masterbrew/Library/Formula/#{Formula.path(name).basename}"
@@ -150,16 +151,19 @@ def install f
       puts "Type `exit' to return and finalize the installation"
       puts "Install to this prefix: #{f.prefix}"
       interactive_shell
+      nil
     elsif ARGV.include? '--help'
       system './configure --help'
       exit $?
     else
       f.prefix.mkpath
+      beginning=Time.now
       f.install
       %w[README ChangeLog COPYING LICENSE COPYRIGHT AUTHORS].each do |file|
         FileUtils.mv "#{file}.txt", file rescue nil
         f.prefix.install file rescue nil
       end
+      return Time.now-beginning
     end
   end
 end

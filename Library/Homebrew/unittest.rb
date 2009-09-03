@@ -351,4 +351,58 @@ class BeerTasting <Test::Unit::TestCase
       end
     end
   end
+  
+  def test_my_float_assumptions
+    # this may look ridiculous but honestly there's code in brewit that depends on 
+    # this behaviour so I wanted to be certain Ruby floating points are behaving
+    f='10.6'.to_f
+    assert_equal 10.6, f
+    assert f >= 10.6
+    assert f <= 10.6
+    assert_equal 10.5, f-0.1
+    assert_equal 10.7, f+0.1
+  end
+
+  def test_pathname_plus_yeast
+    nostdout do
+      assert_nothing_raised do
+        assert !Pathname.getwd.rmdir_if_possible
+        assert !Pathname.getwd.abv.empty?
+        
+        abcd=orig_abcd=HOMEBREW_CACHE+'abcd'
+        FileUtils.cp ABS__FILE__, abcd
+        abcd=HOMEBREW_PREFIX.install abcd
+        assert (HOMEBREW_PREFIX+orig_abcd.basename).exist?
+        assert abcd.exist?
+        assert_equal HOMEBREW_PREFIX+'abcd', abcd
+
+        assert_raises(RuntimeError) {abcd.write 'CONTENT'}
+        abcd.unlink
+        abcd.write 'HELLOWORLD'
+        assert_equal 'HELLOWORLD', File.read(abcd)
+        
+        assert !orig_abcd.exist?
+        rv=abcd.cp orig_abcd
+        assert orig_abcd.exist?
+        assert_equal rv, orig_abcd
+
+        orig_abcd.unlink
+        assert !orig_abcd.exist?
+        abcd.cp HOMEBREW_CACHE
+        assert orig_abcd.exist?
+
+        foo1=HOMEBREW_CACHE+'foo-0.1.tar.gz'
+        FileUtils.cp ABS__FILE__, foo1
+        assert foo1.file?
+        
+        assert_equal '.tar.gz', foo1.extname
+        assert_equal 'foo-0.1', foo1.stem
+        assert_equal '0.1', foo1.version
+        
+        HOMEBREW_CACHE.chmod_R 0777
+      end
+    end
+    
+    assert_raises(RuntimeError) {Pathname.getwd.install 'non_existant_file'}
+  end
 end

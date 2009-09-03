@@ -42,6 +42,9 @@ class HttpDownloadStrategy <AbstractDownloadStrategy
       puts "File already downloaded and cached"
     end
     return @dl # thus performs checksum verification
+  rescue Exception
+    @dl.unlink
+    raise "There was an error downloading the file:\n#{@url}"
   end
   def stage
     case `file -b #{@dl}`
@@ -55,7 +58,10 @@ class HttpDownloadStrategy <AbstractDownloadStrategy
       else
         # we are assuming it is not an archive, use original filename
         # this behaviour is due to ScriptFileFormula expectations
-        @dl.mv File.basename(@url)
+        # So I guess we should cp, but we mv, for this historic reason
+        # HOWEVER if this breaks some expectation you had we *will* change the
+        # behaviour, just open an issue at github
+        FileUtils.mv @dl, File.basename(@url)
     end
   end
 private
