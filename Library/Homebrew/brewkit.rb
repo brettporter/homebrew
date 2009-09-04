@@ -21,71 +21,63 @@
 #  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-require 'osx/cocoa' # to get number of cores
 require 'fileutils'
 require 'formula'
 require 'download_strategy'
-require 'hw.model'
+require 'hardware'
 
 # TODO
 # 1. Indeed, there should be an option to build 32 or 64 bit binaries
 # 2. Homebrew will not support building 32 and 64 bit lipo'd binaries, I
-#    want to mind, but the simple fact is it is difficult to force most of the
+#    want to, but the simple fact is it is difficult to force most of the
 #    build systems we support to do it.
 
 
-`sw_vers -productVersion` =~ /(10\.\d+)(\.\d+)?/
+`/usr/bin/sw_vers -productVersion` =~ /(10\.\d+)(\.\d+)?/
 MACOS_VERSION=$1.to_f
+ENV['MACOSX_DEPLOYMENT_TARGET']=$1
 
-ENV['MACOSX_DEPLOYMENT_TARGET']=MACOS_VERSION.to_s
-ENV['LDFLAGS']='' # to be consistent, we ignore the existing environment
-
-# this is first, so when you see it in output, you notice it
-cflags='-O3'
+cflags=%w[-O3]
 
 # optimise all the way to eleven, references:
 # http://en.gentoo-wiki.com/wiki/Safe_Cflags/Intel
 # http://forums.mozillazine.org/viewtopic.php?f=12&t=577299
 # http://gcc.gnu.org/onlinedocs/gcc-4.2.1/gcc/i386-and-x86_002d64-Options.html
-case hw_model
-  when :core1
-    # Core DUO is a 32 bit chip
-    # NOTE technically we can do -msse4 with gcc 4.2, but I can't test it, so
-    # haven't tried it, if you have a core1 chip, then please test and commit --mxcl
-    cflags<<" -march=prescott -mfpmath=sse -msse3 -mmmx"
+if MACOS_VERSION >= 10.6
+  case Hardware.intel_family
+  when :penryn
+    cflags<<'-march=core2'<<'-msse4.1'
   when :core2
-    # Core 2 DUO is a 64 bit chip
-    if MACOS_VERSION >= 10.6
-      # 64 bits baby! -mfpmath=sse is automatically switched on by -m64
-      # GCC 4.3 has a -march=core2, but this is 4.2 and nocona is correct
-      cflags<<" -m64 -march=nocona -msse4 -mmmx"
-      ENV['LDFLAGS']="-arch x86_64"
-    else
-      # We don't build 64 bit before 10.6 as nothing else is 64 bit, so any
-      # libraries we build would be unusable by 32 bit software
-      cflags<<" -march=nocona -mfpmath=sse -msse3 -mmmx"      
-    end
-  when :xeon
-    # TODO what optimisations for xeon?
-
-  when :ppc   then abort "Sorry, Homebrew does not support PowerPC architectures"
-  when :dunno then abort "Sorry, Homebrew cannot determine what kind of Mac this is!"
+    cflags<<"-march=core2"<<'-msse4'
+  when :core1
+    cflags<<"-march=prescott"<<'-msse3'
+  end
+  ENV['LDFLAGS']="-arch x86_64"
+  cflags<<'-m64'<<'-mmmx'
+else
+  case Hardware.intel_family
+  when :penryn
+    cflags<<"-march=nocona"<<'-msse4.1'
+  when :core2
+    cflags<<"-march=nocona"<<'-msse4'
+  when :core1
+    cflags<<"-march=prescott"<<'-msse3'
+  end
+  # to be consistent with cflags, we ignore the existing environment
+  ENV['LDFLAGS']=""
+  cflags<<'-mmmx'<<"-mfpmath=sse"
+  
+  # gcc 4.0 is the default on Leopard
+  ENV['CC']='gcc-4.2'
+  ENV['CXX']='g++-4.2'
 end
 
 # -w: keep signal to noise high
 # -fomit-frame-pointer: we are not debugging this software, we are using it
-ENV['CFLAGS']="#{cflags} -w -pipe -fomit-frame-pointer -mmacosx-version-min=#{MACOS_VERSION}"
-ENV['CXXFLAGS']=ENV['CFLAGS']
+ENV['CFLAGS']=ENV['CXXFLAGS']="#{cflags*' '} -w -pipe -fomit-frame-pointer -mmacosx-version-min=#{MACOS_VERSION}"
 
-# lets use gcc 4.2, it is newer and "better", at least I believe so, mail me
-# if I'm wrong
-if MACOS_VERSION==10.5
-  ENV['CC']='gcc-4.2'
-  ENV['CXX']='g++-4.2'
-end
 # compile faster
-ENV['MAKEFLAGS']="-j#{OSX::NSProcessInfo.processInfo.processorCount}"
-
+ENV['MAKEFLAGS']="-j#{Hardware.processor_count}"
 
 # /usr/local is always in the build system path
 unless HOMEBREW_PREFIX.to_s == '/usr/local'
@@ -102,12 +94,13 @@ module HomebrewEnvExtension
   alias_method :j1, :deparallelize
   def gcc_4_0_1
     case MACOS_VERSION
-      when 10.5
-        self['CC']=nil
-        self['CXX']=nil
-      when 10.6..11.0
-        self['CC']='gcc-4.0'
-        self['CXX']='g++-4.0'
+    when 10.5
+      self['CC']=nil
+      self['CXX']=nil
+    when 10.6..11.0
+      self['CC']='gcc-4.0'
+      self['CXX']='g++-4.0'
+      remove_from_cflags '-march=core2' # we *should* add back in stuff but meh for now
     end
   end
   def osx_10_4
@@ -118,10 +111,11 @@ module HomebrewEnvExtension
      %w[-mfpmath=sse -msse3 -mmmx -march=\w+].each {|s| remove_from_cflags s}
   end
   def libxml2
-    self['CXXFLAGS']=self['CFLAGS']+=' -I/usr/include/libxml2'
+    append_to_cflags ' -I/usr/include/libxml2'
   end
   # TODO rename or alias to x11
   def libpng
+    # CPPFLAGS are the C-PreProcessor flags, *not* C++!
     append 'CPPFLAGS', '-I/usr/X11R6/include'
     append 'LDFLAGS', '-L/usr/X11R6/lib'
   end
@@ -129,7 +123,7 @@ module HomebrewEnvExtension
   def enable_warnings
     remove_from_cflags '-w'
   end
-  
+
 private
   def append key, value
     ref=self[key]
@@ -139,14 +133,18 @@ private
       self[key]=ref+' '+value
     end
   end
-  def remove key, rx
+  def append_to_cflags f
+    append 'CFLAGS', f
+    append 'CXXFLAGS', f
+  end
+  def remove key, value
     return if self[key].nil?
-    # sub! doesn't work as "the string is frozen"
-    self[key]=self[key].sub rx, ''
+    self[key]=self[key].sub value, '' # can't use sub! on ENV
     self[key]=nil if self[key].empty? # keep things clean
   end
-  def remove_from_cflags rx
-    %w[CFLAGS CXXFLAGS].each {|key| remove key, rx}
+  def remove_from_cflags f
+    remove 'CFLAGS', f
+    remove 'CXXFLAGS', f
   end
 end
 
@@ -157,7 +155,7 @@ ENV.extend HomebrewEnvExtension
 # http://github.com/mxcl/homebrew/issues/#issue/13
 paths=ENV['PATH'].split(':').reject do |p|
   p.squeeze! '/'
-  p=~%r[^/opt/local] or p=~%r[^/sw]
+  p =~ %r[^/opt/local] or p =~ %r[^/sw]
 end
 ENV['PATH']=paths*':'
 
@@ -169,7 +167,6 @@ def inreplace(path, before, after)
   after.gsub! "\\", "\\\\"
   after.gsub! "/", "\\/"
 
-  # TODO this sucks
-  # either use 'ed', or allow regexp and use a proper ruby function
+  # FIXME use proper Ruby for teh exceptions!
   safe_system "perl", "-pi", "-e", "s/#{before}/#{after}/g", path
 end
