@@ -23,30 +23,29 @@
 #
 module HomebrewArgvExtension
   def named
-    nn=namedp
-    raise UsageError if nn.empty?
-    nn
+    raise UsageError if _named.empty?
+    _named
   end
   def named_empty?
-    namedp.empty?
+    _named.empty?
   end
   def options
     select {|arg| arg[0..0] == '-'}
   end
   def formulae
     require 'formula'
-    named.collect {|name| Formula.factory name}
+    @formulae ||= named.collect {|name| Formula.factory name}
   end
   def kegs
     require 'keg'
-    named.collect do |name|
+    @kegs ||= named.collect do |name|
       d=HOMEBREW_CELLAR+name
       raise "#{name} is not installed" if not d.directory? or d.children.length == 0
       raise "#{name} has multiple installed versions" if d.children.length > 1
       Keg.new d.children[0]
     end
   end
-  
+
   # self documenting perhaps?
   def include? arg
     @n=index arg
@@ -64,6 +63,9 @@ module HomebrewArgvExtension
   def debug?
     flag? '--debug' or ENV['HOMEBREW_DEBUG']
   end
+  def quieter?
+    flag? '--quieter'
+  end
 
   def flag? flag
     options.each do |arg|
@@ -73,31 +75,32 @@ module HomebrewArgvExtension
     end
     return false
   end
-  
+
   def usage
     <<-EOS
 Usage: brew command [formula] ...
 Usage: brew [--prefix] [--cache] [--version]
-Usage: brew [--verbose]
+Usage: brew [--verbose|-v]
 
 Commands:
-  install formula ... [--debug] [--interactive]
+  install formula ... [--debug|-d] [--interactive|-i]
   remove formula ...
-  list formula ...
+  search [regex]
+  list [formula] ...
   link formula ...
   home formula ...
   info [formula] [--github]
   make url
   prune
- 
+
 To visit the Homebrew homepage type:
   brew home
   EOS
   end
-  
+
 private
-  def namedp
-    nn=reject{|arg| arg[0..0] == '-'}.collect{|arg| arg.downcase}.uniq
+  def _named
+    @named ||= reject{|arg| arg[0..0] == '-'}.collect{|arg| arg.downcase}.uniq
   end
 end
 

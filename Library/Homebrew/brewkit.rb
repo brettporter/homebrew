@@ -37,44 +37,50 @@ require 'hardware'
 MACOS_VERSION=$1.to_f
 ENV['MACOSX_DEPLOYMENT_TARGET']=$1
 
-cflags=%w[-O3]
+# ignore existing build vars, thus we should have less bugs to deal with
+ENV['LDFLAGS']=""
 
 # optimise all the way to eleven, references:
 # http://en.gentoo-wiki.com/wiki/Safe_Cflags/Intel
 # http://forums.mozillazine.org/viewtopic.php?f=12&t=577299
 # http://gcc.gnu.org/onlinedocs/gcc-4.2.1/gcc/i386-and-x86_002d64-Options.html
+cflags=[]
 if MACOS_VERSION >= 10.6
   case Hardware.intel_family
-  when :penryn
-    cflags<<'-march=core2'<<'-msse4.1'
-  when :core2
-    cflags<<"-march=core2"<<'-msse4'
-  when :core1
-    cflags<<"-march=prescott"<<'-msse3'
+  when :penryn, :core2
+    # no need to add -mfpmath when you specify -m64
+    cflags<<"-march=core2"<<'-m64'
+    ENV['LDFLAGS']="-arch x86_64"
+  when :core
+    cflags<<"-march=prescott"<<"-mfpmath=sse"
   end
-  ENV['LDFLAGS']="-arch x86_64"
-  cflags<<'-m64'<<'-mmmx'
 else
   case Hardware.intel_family
-  when :penryn
-    cflags<<"-march=nocona"<<'-msse4.1'
-  when :core2
-    cflags<<"-march=nocona"<<'-msse4'
-  when :core1
-    cflags<<"-march=prescott"<<'-msse3'
+  when :penryn, :core2
+    cflags<<"-march=nocona"
+  when :core
+    cflags<<"-march=prescott"
   end
-  # to be consistent with cflags, we ignore the existing environment
-  ENV['LDFLAGS']=""
-  cflags<<'-mmmx'<<"-mfpmath=sse"
+  cflags<<"-mfpmath=sse"
   
-  # gcc 4.0 is the default on Leopard
-  ENV['CC']='gcc-4.2'
-  ENV['CXX']='g++-4.2'
+  ENV['CC']="gcc-4.2"
+  ENV['CXX']="g++-4.2"
+end
+
+cflags<<"-mmmx"
+case Hardware.intel_family
+when :nehalem
+  cflags<<"-msse4.2"
+when :penryn
+  cflags<<"-msse4.1"
+when :core2, :core
+  cflags<<"-msse3"
 end
 
 # -w: keep signal to noise high
 # -fomit-frame-pointer: we are not debugging this software, we are using it
-ENV['CFLAGS']=ENV['CXXFLAGS']="#{cflags*' '} -w -pipe -fomit-frame-pointer -mmacosx-version-min=#{MACOS_VERSION}"
+BREWKIT_SAFE_FLAGS="-w -pipe -fomit-frame-pointer -mmacosx-version-min=#{MACOS_VERSION}"
+ENV['CFLAGS']=ENV['CXXFLAGS']="-O3 #{cflags*' '} #{BREWKIT_SAFE_FLAGS}"
 
 # compile faster
 ENV['MAKEFLAGS']="-j#{Hardware.processor_count}"
@@ -100,15 +106,21 @@ module HomebrewEnvExtension
     when 10.6..11.0
       self['CC']='gcc-4.0'
       self['CXX']='g++-4.0'
-      remove_from_cflags '-march=core2' # we *should* add back in stuff but meh for now
+      remove_from_cflags '-march=core2'
     end
+    remove_from_cflags '-msse4.1'
+    remove_from_cflags '-msse4.2'
   end
   def osx_10_4
     self['MACOSX_DEPLOYMENT_TARGET']=nil
     remove_from_cflags(/ ?-mmacosx-version-min=10\.\d/)
   end
-  def generic_i386
-     %w[-mfpmath=sse -msse3 -mmmx -march=\w+].each {|s| remove_from_cflags s}
+  def minimal_optimization
+    self['CFLAGS']=self['CXXFLAGS']="-Os #{BREWKIT_SAFE_FLAGS}"
+    
+  end
+  def no_optimization
+    self['CFLAGS']=self['CXXFLAGS']=BREWKIT_SAFE_FLAGS
   end
   def libxml2
     append_to_cflags ' -I/usr/include/libxml2'

@@ -25,6 +25,7 @@
 def ohai title, *args
   return if args.length > 0 and args[0].nil?
   n=`tput cols`.strip.to_i-4
+  n=title.length if ARGV.verbose?
   puts "\033[0;34m==>\033[0;0;1m #{title[0,n]}\033[0;0m"
   args.each do |arg|
     return if arg.nil?
@@ -34,7 +35,7 @@ end
 
 # shows a warning in delicious pink
 def opoo warning
-  puts "\033[1;35m==>\033[0;0;1m Warning\033[0;0m: #{warning}"
+  puts "\033[1;35m==>\033[0;0;1m Warning!\033[0;0m #{warning}"
 end
 
 def onoe error
@@ -72,4 +73,10 @@ end
 
 def curl url, *args
   safe_system 'curl', '-f#LA', HOMEBREW_USER_AGENT, url, *args
+end
+
+def puts_columns items, cols = 4
+  items = items.join("\n") if items.is_a?(Array)
+  width=`stty size`.chomp.split(" ").last
+  IO.popen("pr -#{cols} -t", "w"){|io| io.write(items) }
 end
