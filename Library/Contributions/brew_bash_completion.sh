@@ -1,9 +1,7 @@
 # This script contains bash completions for brew.
+#
 # To use, edit your .bashrc and add the line:
 #   source `brew --prefix`/Library/Contributions/brew_bash_completion.sh
-#
-# Assuming you have brew installed in /usr/local, then you'll want:
-#   source /usr/local/Library/Contributions/brew_bash_completion.sh
 
 _brew_to_completion()
 {
@@ -15,7 +13,7 @@ _brew_to_completion()
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     
     # We only complete unabbreviated commands...
-    actions="edit homepage info install list link make uninstall"
+    actions="edit generate homepage info install list link uninstall"
     
     # Subcommand list
     if [[ ( ${COMP_CWORD} -eq 1 ) && ( ${COMP_WORDS[0]} == brew )  ]] ; then

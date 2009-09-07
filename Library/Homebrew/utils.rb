@@ -64,11 +64,12 @@ end
 # Kernel.system but with exceptions
 def safe_system cmd, *args
   puts "#{cmd} #{args*' '}" if ARGV.verbose?
-
-  execd=Kernel.system cmd, *args
-  # somehow Ruby doesn't handle the CTRL-C from another process -- WTF!?
+  exec_success=Kernel.system cmd, *args
+  # some tools, eg. tar seem to confuse ruby and it doesn't propogate the
+  # CTRL-C interrupt to us too, so execution continues, but the exit code os
+  # still 2 so we raise our own interrupt
   raise Interrupt, cmd if $?.termsig == 2
-  raise ExecutionError.new(cmd, args) unless execd and $? == 0
+  raise ExecutionError.new(cmd, args) unless exec_success and $?.success?
 end
 
 def curl url, *args
@@ -79,4 +80,16 @@ def puts_columns items, cols = 4
   items = items.join("\n") if items.is_a?(Array)
   width=`stty size`.chomp.split(" ").last
   IO.popen("pr -#{cols} -t", "w"){|io| io.write(items) }
+end
+
+def exec_editor *args
+  editor=ENV['EDITOR']
+  if editor.nil?
+    if system "which -s mate" and $?.success?
+      editor='mate'
+    else
+      editor='vim'
+    end
+  end
+  exec editor, *args
 end
