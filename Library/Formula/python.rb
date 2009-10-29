@@ -1,22 +1,43 @@
-require 'brewkit'
+require 'formula'
 
 class Python <Formula
-  @url='http://www.python.org/ftp/python/2.6.2/Python-2.6.2.tar.bz2'
-  @homepage='http://www.python.org/'
-  @md5='245db9f1e0f09ab7e0faaa0cf7301011'
+  url 'http://python.org/ftp/python/2.6.3/Python-2.6.3.tar.bz2'
+  homepage 'http://www.python.org/'
+  md5 '8755fc03075b1701ca3f13932e6ade9f'
 
-  def deps
-    # You can build Python without readline, but you really don't want to.
-    LibraryDep.new 'readline'
-  end
+  # You can build Python without readline, but you really don't want to.
+  depends_on 'readline' => :recommended
   
+  def options
+    [
+      ["--framework", "Do a 'Framework' build instead of a UNIX-style build."],
+      ["--intel", "Build for both 32 & 64 bit Intel."]
+    ]
+  end
+
   def skip_clean? path
     path == bin+'python' or path == bin+'python2.6' or # if you strip these, it can't load modules
     path == lib+'python2.6' # save a lot of time
   end
 
   def install
-    system "./configure --prefix='#{prefix}' --with-framework-name=/Developer/SDKs/MacOSX10.5.sdk"
+    args = ["--prefix=#{prefix}"]
+
+    if ARGV.include? '--framework'
+      args << "--enable-framework"
+    end
+    
+    if ARGV.include? '--intel'
+      args << "--with-universal-archs=intel --enable-universalsdk=/"
+    end
+    
+    # Speed up creation of libpython.a, backported from Unladen Swallow:
+    # http://code.google.com/p/unladen-swallow/source/detail?r=856
+    inreplace "Makefile.pre.in", "$(AR) cr", "$(AR) cqS"
+    
+    system "./configure", *args
+    
+    
     system "make"
     system "make install"
     

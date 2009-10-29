@@ -1,4 +1,4 @@
-require 'brewkit'
+require 'formula'
 
 class Jpeg <Formula
   @url='http://www.ijg.org/files/jpegsrc.v7.tar.gz'
@@ -6,7 +6,7 @@ class Jpeg <Formula
   @homepage='http://www.ijg.org'
 
   def install
-    system "./configure --disable-debug --prefix='#{prefix}'"
+    system "./configure", "--prefix=#{prefix}"
     system "make install"
   end
 end

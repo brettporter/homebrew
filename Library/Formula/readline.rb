@@ -1,12 +1,20 @@
-require 'brewkit'
+require 'formula'
 
 class Readline <Formula
-  @url='ftp://ftp.gnu.org/gnu/readline/readline-5.2.tar.gz'
+  @url='ftp://ftp.cwru.edu/pub/bash/readline-6.0.tar.gz'
   @homepage='http://tiswww.case.edu/php/chet/readline/rltop.html'
-  @md5='e39331f32ad14009b9ff49cc10c5e751'
+  @md5='b7f65a48add447693be6e86f04a63019'
+
+  def keg_only? ; <<-EOS
+OS X provides the BSD Readline library. In order to prevent conflicts when
+programs look for libreadline we are defaulting this GNU Readline installation
+to keg-only.
+    EOS
+  end
 
   def patches
-    (1..14).collect {|n| "ftp://ftp.gnu.org/gnu/readline/readline-5.2-patches/readline52-%03d"%n}
+    patches = (1..4).collect { |n| "ftp://ftp.gnu.org/gnu/readline/readline-6.0-patches/readline60-%03d"%n }
+    { :p0 => patches }
   end
 
   def install

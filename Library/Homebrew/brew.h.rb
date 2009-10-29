@@ -21,32 +21,27 @@
 #  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-def make url
+FORMULA_META_FILES = %w[README ChangeLog COPYING LICENSE COPYRIGHT AUTHORS]
+
+def __make url, name
   require 'formula'
 
-  path=Pathname.new url
-
-  /(.*?)[-_.]?#{path.version}/.match path.basename
-  raise "Couldn't parse name from #{url}" if $1.nil? or $1.empty?
-
-  path=Formula.path $1
+  path = Formula.path name
   raise "#{path} already exists" if path.exist?
 
   template=<<-EOS
-            require 'brewkit'
+            require 'formula'
 
-            class #{Formula.class $1} <Formula
-              @url='#{url}'
-              @homepage=''
-              @md5=''
+            class #{Formula.class_s name} <Formula
+              url '#{url}'
+              homepage ''
+              md5 ''
 
-  cmake       def deps
-  cmake         BinaryDep.new 'cmake'
-  cmake       end
-  cmake
+  cmake       depends_on 'cmake'
+
               def install
   autotools     system "./configure", "--prefix=\#{prefix}", "--disable-debug", "--disable-dependency-tracking"
-  cmake         system "cmake . \#{cmake_std_parameters}"
+  cmake         system "cmake . \#{std_cmake_parameters}"
                 system "make install"
               end
             end
@@ -90,21 +85,59 @@ def make url
   return path
 end
 
+def make url
+  path = Pathname.new url
+
+  /(.*?)[-_.]?#{path.version}/.match path.basename
+
+  unless $1.to_s.empty?
+    name = $1
+  else
+    print "Formula name [#{path.stem}]: "
+    gots = $stdin.gets.chomp
+    if gots.empty?
+      name = path.stem
+    else
+      name = gots
+    end
+  end
+
+  force_text = "If you really want to make this formula use --force."
+
+  case name.downcase
+  when /libxml/, /libxlst/, /freetype/, /libpng/, /wxwidgets/
+    raise <<-EOS
+#{name} is blacklisted for creation
+Apple distributes this library with OS X, you can find it in /usr/X11/lib.
+However not all build scripts look here, so you may need to call ENV.x11 or
+ENV.libxml2 in your formula's install function.
+
+#{force_text}
+    EOS
+  end unless ARGV.force?
+
+  __make url, name
+end
+
 
 def info name
   require 'formula'
 
   user=''
-  user=`git config --global github.user`.chomp if system "which git > /dev/null"
+  user=`git config --global github.user`.chomp if system "/usr/bin/which -s git"
   user='mxcl' if user.empty?
-  # FIXME it would be nice if we didn't assume the default branch is masterbrew
-  history="http://github.com/#{user}/homebrew/commits/masterbrew/Library/Formula/#{Formula.path(name).basename}"
+  # FIXME it would be nice if we didn't assume the default branch is master
+  history="http://github.com/#{user}/homebrew/commits/master/Library/Formula/#{Formula.path(name).basename}"
 
   exec 'open', history if ARGV.flag? '--github'
 
   f=Formula.factory name
   puts "#{f.name} #{f.version}"
   puts f.homepage
+
+  if not f.deps.empty?
+    puts "Depends on: #{f.deps.join(', ')}"
+  end
 
   if f.prefix.parent.directory?
     kids=f.prefix.parent.children
@@ -139,33 +172,32 @@ end
 
 def clean f
   Cleaner.new f
-  # remove empty directories TODO Rubyize!
-  `perl -MFile::Find -e"finddepth(sub{rmdir},'#{f.prefix}')"`
+ 
+  # Hunt for empty folders and nuke them unless they are
+  # protected by f.skip_clean?
+  # We want post-order traversal, so put the dirs in a stack
+  # and then pop them off later.
+  paths = []
+  f.prefix.find do |path|
+    paths << path if path.directory?
+  end
+
+  until paths.empty? do
+    d = paths.pop
+    if d.children.empty? and not f.skip_clean? d
+      puts "rmdir: #{d} (empty)" if ARGV.verbose?
+      d.rmdir
+    end
+  end
 end
 
 
-def install f
-  f.brew do
-    if ARGV.flag? '--interactive'
-      ohai "Entering interactive mode"
-      puts "Type `exit' to return and finalize the installation"
-      puts "Install to this prefix: #{f.prefix}"
-      interactive_shell
-      nil
-    elsif ARGV.include? '--help'
-      system './configure --help'
-      exit $?
-    else
-      f.prefix.mkpath
-      beginning=Time.now
-      f.install
-      %w[README ChangeLog COPYING LICENSE COPYRIGHT AUTHORS].each do |file|
-        FileUtils.mv "#{file}.txt", file rescue nil
-        f.prefix.install file rescue nil
-      end
-      return Time.now-beginning
-    end
+def expand_deps ff
+  deps = []
+  ff.deps.collect do |f|
+    deps += expand_deps(Formula.factory(f))
   end
+  deps << ff
 end
 
 
@@ -230,6 +262,111 @@ def diy
   end
 end
 
+
+def warn_about_macports_or_fink
+  # See these issues for some history:
+  # http://github.com/mxcl/homebrew/issues/#issue/13
+  # http://github.com/mxcl/homebrew/issues/#issue/41
+  # http://github.com/mxcl/homebrew/issues/#issue/48
+  
+  %w[port fink].each do |ponk|
+    path = `/usr/bin/which -s #{ponk}`
+    unless path.empty?
+      opoo "It appears you have Macports or Fink in your PATH"
+      puts "If formula fail to build try renaming or uninstalling these tools."
+    end
+  end
+  
+  # we do the above check because macports can be relocated and fink may be
+  # able to be relocated in the future. This following check is because if
+  # fink and macports are not in the PATH but are still installed it can
+  # *still* break the build -- because some build scripts hardcode these paths:
+  %w[/sw/bin/fink /opt/local/bin/port].each do |ponk|
+    if File.exist? ponk
+      opoo "It appears you have MacPorts or Fink installed"
+      puts "If formula fail to build, consider renaming: %s" % Pathname.new(ponk).dirname.parent
+    end
+  end
+  
+  # finally sometimes people make their MacPorts or Fink read-only so they
+  # can quickly test Homebrew out, but still in theory obey the README's 
+  # advise to rename the root directory. This doesn't work, many build scripts
+  # error out when they try to read from these now unreadable directories.
+  %w[/sw /opt/local].each do |path|
+    if File.exist? path and not File.readable? path
+      opoo "It appears you have MacPorts or Fink installed"
+      puts "This has been known to cause build fails and other more subtle problems."
+    end
+  end
+end
+
+
+def versions_of(keg_name)
+  `ls #{HOMEBREW_CELLAR}/#{keg_name}`.collect { |version| version.strip }.reverse
+end
+
+
+########################################################## class PrettyListing
+class PrettyListing
+  def initialize path
+    Pathname.new(path).children.sort{ |a,b| a.to_s.downcase <=> b.to_s.downcase }.each do |pn|
+      case pn.basename.to_s
+      when 'bin', 'sbin'
+        pn.find { |pnn| puts pnn unless pnn.directory? }
+      when 'lib'
+        print_dir pn do |pnn|
+          # dylibs have multiple symlinks and we don't care about them
+          (pnn.extname == '.dylib' or pnn.extname == '.pc') and not pnn.symlink?
+        end
+      else
+        if pn.directory?
+          print_dir pn
+        elsif not FORMULA_META_FILES.include? pn.basename.to_s
+          puts pn
+        end
+      end
+    end
+  end
+
+private
+  def print_dir root
+    dirs = []
+    remaining_root_files = []
+    other = ''
+
+    root.children.sort.each do |pn|
+      if pn.directory?
+        dirs << pn
+      elsif block_given? and yield pn
+        puts pn
+        other = 'other '
+      else
+        remaining_root_files << pn 
+      end
+    end
+
+    dirs.each do |d|
+      files = []
+      d.find { |pn| files << pn unless pn.directory? }
+      print_remaining_files files, d
+    end
+
+    print_remaining_files remaining_root_files, root, other
+  end
+
+  def print_remaining_files files, root, other = ''
+    case files.length
+    when 0
+      # noop
+    when 1
+      puts *files
+    else
+      puts "#{root}/ (#{files.length} #{other}files)"
+    end
+  end
+end
+
+
 ################################################################ class Cleaner
 class Cleaner
   def initialize f
@@ -270,7 +407,7 @@ private
 
   def clean_file path
     perms=0444
-    case `file -h #{path}`
+    case `file -h '#{path}'`
     when /Mach-O dynamically linked shared library/
       strip path, '-SxX'
     when /Mach-O [^ ]* ?executable/
@@ -291,7 +428,7 @@ private
       elsif path.extname == '.la' and not @f.skip_clean? path
         # *.la files are stupid
         path.unlink
-      else
+      elsif not path.symlink?
         clean_file path
       end
     end

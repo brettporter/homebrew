@@ -1,13 +1,15 @@
-require 'brewkit'
+require 'formula'
 
 class Mplayer <Formula
   @homepage='http://www.mplayerhq.hu/'
-  @url='http://www.mplayerhq.hu/MPlayer/releases/mplayer-checkout-snapshot.tar.bz2'
-  @md5=''
-  @verison='snapshot'
+  @head='svn://svn.mplayerhq.hu/mplayer/trunk'
+  
+  depends_on 'pkg-config' => :recommended
 
   def install
-    system "./configure --disable-debug --prefix='#{prefix}'"
+    ENV.gcc_4_2   # llvm chokes on labels within mlp inline asm
+    system "./configure --prefix='#{prefix}'"
+    system "make"
     system "make install"
   end
 end

@@ -1,4 +1,4 @@
-require 'brewkit'
+require 'formula'
 
 class Sshfs <Formula
   @url='http://downloads.sourceforge.net/project/fuse/sshfs-fuse/2.2/sshfs-fuse-2.2.tar.gz'
@@ -8,16 +8,12 @@ class Sshfs <Formula
   @md5='26e9206eb5169e87e6f95f54bc005a4f'
 
   def patches
-    {
-      :p1 => ["http://macfuse.googlecode.com/svn/tags/macfuse-2.0.3|2/filesystems/sshfs/sshfs-fuse-2.2-macosx.patch"]
-    }
+    "http://macfuse.googlecode.com/svn/tags/macfuse-2.0.3|2/filesystems/sshfs/sshfs-fuse-2.2-macosx.patch"
   end
 
-  def deps
-    BinaryDep.new 'pkg-config'
-    LibraryDep.new 'glib'
-    LibraryDep.new 'macfuse'
-  end
+  depends_on 'pkg-config'
+  depends_on 'glib'
+  depends_on 'macfuse'
 
   def install
     # Steal compile flags from macfuse_buildtool.sh

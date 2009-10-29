@@ -1,14 +1,12 @@
-require 'brewkit'
+require 'formula'
 
 class Playdar <Formula
   @homepage='http://www.playdar.org'
   @head='git://github.com/mxcl/playdar.git'
 
-  def deps
-    LibraryDep.new 'taglib'
-    LibraryDep.new 'boost'
-    BinaryDep.new 'cmake'
-  end
+  depends_on 'taglib'
+  depends_on 'boost'
+  depends_on 'cmake'
 
   def skip_clean? path
     # for some reason stripping breaks it

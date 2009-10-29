@@ -1,24 +1,32 @@
-require 'brewkit'
+require 'formula'
 
 class Qt <Formula
-  @url='http://get.qtsoftware.com/qt/source/qt-mac-opensource-src-4.5.2.tar.gz'
-  @md5='c549d6c0c2e0723377cb955c78a1b680'
-  @homepage='http://www.qtsoftware.com'
+  url 'http://get.qt.nokia.com/qt/source/qt-mac-opensource-src-4.5.3.tar.gz'
+  md5 'c549d6c0c2e0723377cb955c78a1b680'
+  homepage 'http://www.qtsoftware.com'
 
   def install
-    if version == '4.5.2'
+    if version == '4.5.3'
       # Reported 6 months ago (at 4.5.0-rc1), still not fixed in the this release! :(
       makefiles=%w[plugins/sqldrivers/sqlite/sqlite.pro 3rdparty/webkit/WebCore/WebCore.pro]
       makefiles.each { |makefile| `echo 'LIBS += -lsqlite3' >> src/#{makefile}` }
     end
 
-    system "configure", "-prefix", prefix,
-                        "-system-sqlite", "-system-libpng", "-system-zlib",
-                        "-nomake", "demos", "-nomake", "examples", "-no-qt3support",
-                        "-release", "-cocoa", "-arch x86",
-                        "-confirm-license", "-opensource",
-                        "-I/usr/X11R6/include", "-L/usr/X11R6/lib",
-                        "-fast"
+    conf_args = ["-prefix", prefix,
+                 "-system-sqlite", "-system-libpng", "-system-zlib",
+                 "-nomake", "demos", "-nomake", "examples", "-no-qt3support",
+                 "-release", "-cocoa",
+                 "-confirm-license", "-opensource",
+                 "-I/usr/X11R6/include", "-L/usr/X11R6/lib",
+                 "-fast"]
+    
+    if MACOS_VERSION >= 10.6
+      conf_args << '-arch' << 'x86_64'
+    else
+      conf_args << '-arch' << 'x86'
+    end
+    
+    system "./configure", *conf_args
     system "make install"
 
     # fuck weird prl files

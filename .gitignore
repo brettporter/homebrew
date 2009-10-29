@@ -1,10 +1,5 @@
-.DS_Store
-/bin
-/Cellar
-/lib
-/include
-/sbin
-/share
-/etc
+/*
+!/.gitignore
 !/Library/
+!/README.md
 !/bin/brew
