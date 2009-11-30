@@ -28,6 +28,7 @@ class Tty
     def red; underline 31; end
     def yellow; underline 33 ; end
     def reset; escape 0; end
+    def em; underline 39; end
     
   private
     def color n
@@ -69,30 +70,29 @@ def pretty_duration s
 end
 
 def interactive_shell
-  pid=fork
-  if pid.nil?
+  fork do
     # TODO make the PS1 var change pls
     #brown="\[\033[0;33m\]"
     #reset="\[\033[0m\]"
     #ENV['PS1']="Homebrew-#{HOMEBREW_VERSION} #{brown}\W#{reset}\$ "
     exec ENV['SHELL']
   end
-  Process.wait pid
-  raise SystemExit, "Aborting due to non-zero exit status" if $? != 0
+  Process.wait
+  unless $?.success?
+    puts "Aborting due to non-zero exit status"
+    exit $?
+  end
 end
 
 # Kernel.system but with exceptions
 def safe_system cmd, *args
   puts "#{cmd} #{args*' '}" if ARGV.verbose?
-  exec_success = Kernel.system cmd, *args
-  # some tools, eg. tar seem to confuse ruby and it doesn't propogate the
-  # CTRL-C interrupt to us too, so execution continues, but the exit code os
-  # still 2 so we raise our own interrupt
-  raise Interrupt, cmd if $?.termsig == 2
-  unless exec_success
-    puts "Exit code: #{$?}"
-    raise ExecutionError.new(cmd, args)
-  end 
+  fork do
+    exec(cmd, *args) rescue nil
+    exit! 1 # never gets here unless exec failed
+  end
+  Process.wait
+  raise ExecutionError.new(cmd, args, $?) unless $?.success?
 end
 
 def curl *args
@@ -146,11 +146,32 @@ def arch_for_command cmd
     return archs
 end
 
-
 # replaces before with after for the file path
 def inreplace path, before, after
   f = File.open(path, 'r')
   o = f.read.gsub(before, after)
   f.reopen(path, 'w').write(o)
   f.close
+end
+
+def ignore_interrupts
+  std_trap = trap("INT") {}
+  yield
+ensure
+  trap("INT", std_trap)
+end
+
+def nostdout
+  if ARGV.verbose?
+    yield
+  else
+    begin
+      require 'stringio'
+      real_stdout = $stdout
+      $stdout = StringIO.new
+      yield
+    ensure
+      $stdout = real_stdout
+    end
+  end
 end

@@ -23,13 +23,6 @@
 #
 require 'download_strategy'
 
-class ExecutionError <RuntimeError
-  def initialize cmd, args=[]
-    super "Failure while executing: #{cmd} #{args*' '}"
-  end
-end
-class BuildError <ExecutionError
-end
 class FormulaUnavailableError <RuntimeError
   def initialize name
     @name = name
@@ -223,26 +216,30 @@ protected
   # Pretty titles the command and buffers stdout/stderr
   # Throws if there's an error
   def system cmd, *args
-    full="#{cmd} #{args*' '}".strip
-    ohai full
+    ohai "#{cmd} #{args*' '}".strip
+
     if ARGV.verbose?
       safe_system cmd, *args
     else
-      out=''
-      # TODO write a ruby extension that does a good popen :P
-      IO.popen "#{full} 2>&1" do |f|
-        until f.eof?
-          out+=f.gets
-        end
+      rd, wr = IO.pipe
+      pid = fork do
+        rd.close
+        $stdout.reopen wr
+        $stderr.reopen wr
+        exec(cmd, *args) rescue nil
+        exit! 1 # never gets here unless exec threw or failed
       end
-      unless $? == 0
-        puts "Exit code: #{$?}"
+      wr.close
+      out = ''
+      out << rd.read until rd.eof?
+      Process.wait
+      unless $?.success?
         puts out
         raise
       end
     end
   rescue
-    raise BuildError.new(cmd, args)
+    raise BuildError.new(cmd, args, $?)
   end
 
 private
