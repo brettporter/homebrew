@@ -1,19 +1,19 @@
 require 'formula'
 
-class Yajl <Formula
-  @homepage='http://lloyd.github.com/yajl/'
-  @url='http://github.com/lloyd/yajl/tarball/1.0.6'
-  @md5='bb201150143352b117be702a1bc78405'
+class Yajl < Formula
+  homepage 'http://lloyd.github.com/yajl/'
+  url 'http://github.com/lloyd/yajl/tarball/2.0.2'
+  sha256 '4917049b7700e289d38e0ac82f63b7182a5dfc6cf21c5eb9a26d70b6d2e7b68b'
 
-  depends_on 'cmake'
+  # Configure uses cmake, even though it looks like we're
+  # just using autotools below.
+  depends_on 'cmake' => :build
 
   def install
     ENV.deparallelize
 
-    # I have pushed this fix upstream
-    inreplace 'configure', 'cmake ..', "cmake #{std_cmake_parameters} .." if @version == "1.0.5"
-
-    system "./configure --prefix '#{prefix}'"
+    system "./configure", "--prefix=#{prefix}"
     system "make install"
+    (include + 'yajl').install Dir['src/api/*.h']
   end
 end

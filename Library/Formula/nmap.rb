@@ -1,25 +1,28 @@
 require 'formula'
 
-class Nmap <Formula
-  @url='http://nmap.org/dist/nmap-5.00.tar.bz2'
-  @homepage='http://nmap.org/5/'
-  @md5='32d27de32166c02d670bb4a086185886'
+class Nmap < Formula
+  url 'http://nmap.org/dist/nmap-5.51.tar.bz2'
+  homepage 'http://nmap.org/5/'
+  md5 '0b80d2cb92ace5ebba8095a4c2850275'
+  head 'svn://guest:@svn.insecure.org/nmap/', :using => :svn
+
+  # Leopard's version of OpenSSL isn't new enough
+  depends_on "openssl" if MacOS.leopard?
+
+  fails_with_llvm
 
   def install
-    system "./configure", "--prefix=#{prefix}", 
-                          "--without-zenmap"
-    
-    system "make"                      
-    system "make install" # seperate steps required otherwise the build fails
-  end
+    ENV.deparallelize
 
-  def caveats; <<-EOS
-Root level scans do not work under Snow Leopard. 
-More information: http://seclists.org/nmap-dev/2009/q3/0904.html
+    args = ["--prefix=#{prefix}", "--without-zenmap"]
 
-There is a fix but it was made after the 5.00 release, so if you need it 
-install the latest Nmap from the subversion repository.
-http://nmap.org/book/install.html#inst-svn
-    EOS
+    if MacOS.leopard?
+      openssl = Formula.factory('openssl')
+      args << "--with-openssl=#{openssl.prefix}"
+    end
+
+    system "./configure", *args
+    system "make" # seperate steps required otherwise the build fails
+    system "make install"
   end
 end

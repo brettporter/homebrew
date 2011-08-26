@@ -1,16 +1,17 @@
 require 'formula'
 
-# TODO other names include Pipe Viewer
+class Pv < Formula
+  url 'http://pipeviewer.googlecode.com/files/pv-1.2.0.tar.bz2'
+  homepage 'http://www.ivarch.com/programs/pv.shtml'
+  md5 '67aedf6dbcd068d5feeaa76156153f4f'
 
-class Pv <Formula
-  @url='http://pipeviewer.googlecode.com/files/pv-1.1.4.tar.bz2'
-  @homepage='http://www.ivarch.com/programs/pv.shtml'
-  @md5='63033e090d61a040407bfd043aeb6d27'
+  fails_with_llvm
 
   def install
-    ENV.gcc_4_2
-
-    system "./configure", "--prefix=#{prefix}", "--disable-debug", "--disable-dependency-tracking"
+    system "./configure", "--disable-debug", "--disable-dependency-tracking",
+                          "--prefix=#{prefix}",
+                          "--mandir=#{man}",
+                          "--disable-nls"
     system "make install"
   end
 end

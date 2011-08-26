@@ -1,87 +1,117 @@
 require 'formula'
+require 'hardware'
 
-class Qt <Formula
-  url 'http://get.qt.nokia.com/qt/source/qt-mac-opensource-src-4.5.3.tar.gz'
-  md5 '484e3739fdc51540218ed92f4b732881'
-  homepage 'http://www.qtsoftware.com'
+class Qt < Formula
+  url 'http://get.qt.nokia.com/qt/source/qt-everywhere-opensource-src-4.7.3.tar.gz'
+  md5 '49b96eefb1224cc529af6fe5608654fe'
+  homepage 'http://qt.nokia.com/'
+  bottle 'https://downloads.sourceforge.net/project/machomebrew/Bottles/qt-4.7.3-bottle.tar.gz'
+  bottle_sha1 'a50123be33c96cba97d4bcee61f3859c7d52000e'
+
+  head 'git://gitorious.org/qt/qt.git', :branch => 'master'
 
   def patches
-    # Give the option to use Qt3Support even when using Cocoa.
-    "http://qt.gitorious.org/+qt-iphone/qt/qt-iphone-clone/commit/106d7a210be1e6d52946b575a262e2c76c5e51e6.patch"
+    [
+      # Fixes compilation on Lion or with llvm-gcc
+      # Should be unneeded in Qt 4.7.4.
+      "https://qt.gitorious.org/qt/qt/commit/91be1263b42a0a91daf3f905661e356e31482fd3?format=patch",
+      # Stop complaining about using Lion
+      "https://qt.gitorious.org/qt/qt/commit/1766bbdb53e1e20a1bbfb523bbbbe38ea7ab7b3d?format=patch"
+    ]
   end
 
   def options
     [
-      ['--with-dbus', "Enable QtDBus module."],
+      ['--with-qtdbus', "Enable QtDBus module."],
       ['--with-qt3support', "Enable deprecated Qt3Support module."],
+      ['--with-demos-examples', "Enable Qt demos and examples."],
+      ['--with-debug-and-release', "Compile Qt in debug and release mode."],
+      ['--universal', "Build both x86_64 and x86 architectures."],
     ]
   end
 
-  depends_on "dbus" if ARGV.include? '--with-dbus'
-  depends_on "dbus" if ARGV.include? '--with-qt3support'
-  depends_on 'libpng' unless File.exist? "/usr/X11R6/lib"
+  depends_on "d-bus" if ARGV.include? '--with-qtdbus'
+  depends_on 'sqlite' if MacOS.leopard?
 
   def install
-    if version == '4.5.3'
-      # Reported 6 months ago (at 4.5.0-rc1), still not fixed in the this release! :(
-      makefiles=%w[plugins/sqldrivers/sqlite/sqlite.pro 3rdparty/webkit/WebCore/WebCore.pro]
-      makefiles.each { |makefile| `echo 'LIBS += -lsqlite3' >> src/#{makefile}` }
-    end
+    ENV.x11
+    ENV.append "CXXFLAGS", "-fvisibility=hidden"
+    args = ["-prefix", prefix,
+            "-system-libpng", "-system-zlib",
+            "-L/usr/X11/lib", "-I/usr/X11/include",
+            "-confirm-license", "-opensource",
+            "-cocoa", "-fast" ]
 
-    conf_args = ["-prefix", prefix,
-                 "-system-sqlite", "-system-libpng", "-system-zlib",
-                 "-nomake", "demos", "-nomake", "examples",
-                 "-release", "-cocoa",
-                 "-confirm-license", "-opensource",
-                 "-fast"]
+    # See: https://github.com/mxcl/homebrew/issues/issue/744
+    args << "-system-sqlite" if MacOS.leopard?
+    args << "-plugin-sql-mysql" if (HOMEBREW_CELLAR+"mysql").directory?
 
-    if ARGV.include? '--with-dbus'
-      conf_args << "-I#{Formula.factory('dbus').lib}/dbus-1.0/include"
-      conf_args << "-I#{Formula.factory('dbus').include}/dbus-1.0"
-      conf_args << "-ldbus-1"
-      conf_args << "-dbus-linked"
+    if ARGV.include? '--with-qtdbus'
+      args << "-I#{Formula.factory('d-bus').lib}/dbus-1.0/include"
+      args << "-I#{Formula.factory('d-bus').include}/dbus-1.0"
     end
 
     if ARGV.include? '--with-qt3support'
-      conf_args << "-qt3support"
+      args << "-qt3support"
     else
-      conf_args << "-no-qt3support"
+      args << "-no-qt3support"
     end
 
-    if File.exist? "/usr/X11R6/lib"
-      conf_args << "-L/usr/X11R6/lib"
-      conf_args << "-I/usr/X11R6/include"
-    else
-      conf_args << "-L#{Formula.factory('libpng').lib}"
-      conf_args << "-I#{Formula.factory('libpng').include}"
+    unless ARGV.include? '--with-demos-examples'
+      args << "-nomake" << "demos" << "-nomake" << "examples"
     end
 
-    if MACOS_VERSION >= 10.6
-      conf_args << '-arch' << 'x86_64'
-    else
-      conf_args << '-arch' << 'x86'
+    if MacOS.prefer_64_bit? or ARGV.build_universal?
+      args << '-arch' << 'x86_64'
     end
-    
-    system "./configure", *conf_args
+
+    if !MacOS.prefer_64_bit? or ARGV.build_universal?
+      args << '-arch' << 'x86'
+    end
+
+    if ARGV.include? '--with-debug-and-release'
+      args << "-debug-and-release"
+      # Debug symbols need to find the source so build in the prefix
+      Dir.chdir '..'
+      mv "qt-everywhere-opensource-src-#{version}", "#{prefix}/src"
+      Dir.chdir "#{prefix}/src"
+    else
+      args << "-release"
+    end
+
+    system "./configure", *args
+    system "make"
+    ENV.j1
     system "make install"
 
-    # fuck weird prl files
-    `find #{lib} -name \*.prl -delete`
-    # fuck crazy disk usage
-    (prefix+'doc'+'html').rmtree
-    (prefix+'doc'+'src').rmtree
-    # wtf are these anyway?
-    (bin+'Assistant_adp.app').rmtree
+    # stop crazy disk usage
+    (prefix+'doc/html').rmtree
+    (prefix+'doc/src').rmtree
+    # what are these anyway?
     (bin+'pixeltool.app').rmtree
     (bin+'qhelpconverter.app').rmtree
-    # we specified no debug already! :P
-    (lib+'libQtUiTools_debug.a').unlink
-    (lib+'pkgconfig/QtUiTools_debug.pc').unlink
-    # meh
+    # remove porting file for non-humans
     (prefix+'q3porting.xml').unlink
+
+    # Some config scripts will only find Qt in a "Frameworks" folder
+    # VirtualBox is an example of where this is needed
+    # See: https://github.com/mxcl/homebrew/issues/issue/745
+    cd prefix do
+      ln_s lib, "Frameworks"
+    end
+
+    # The pkg-config files installed suggest that geaders can be found in the
+    # `include` directory. Make this so by creating symlinks from `include` to
+    # the Frameworks' Headers folders.
+    Pathname.glob(lib + '*.framework/Headers').each do |path|
+      framework_name = File.basename(File.dirname(path), '.framework')
+      ln_s path.realpath, include+framework_name
+    end
   end
 
-  def caveats
-    "We agreed to the Qt opensource license for you.\nIf this is unacceptable you should uninstall :P"
+  def caveats; <<-EOS.undent
+    We agreed to the Qt opensource license for you.
+    If this is unacceptable you should uninstall.
+    EOS
   end
 end

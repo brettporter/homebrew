@@ -1,12 +1,14 @@
 require 'formula'
 
-class Jpeg <Formula
-  @url='http://www.ijg.org/files/jpegsrc.v7.tar.gz'
-  @md5='382ef33b339c299b56baf1296cda9785'
-  @homepage='http://www.ijg.org'
+class Jpeg < Formula
+  url 'http://www.ijg.org/files/jpegsrc.v8c.tar.gz'
+  version '8c'
+  md5 'a2c10c04f396a9ce72894beb18b4e1f9'
+  homepage 'http://www.ijg.org'
 
   def install
-    system "./configure", "--prefix=#{prefix}"
+    ENV.universal_binary
+    system "./configure", "--prefix=#{prefix}", "--disable-dependency-tracking", "--enable-shared", "--enable-static"
     system "make install"
   end
 end

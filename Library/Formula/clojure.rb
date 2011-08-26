@@ -1,41 +1,42 @@
 require 'formula'
 
-class Clojure <Formula
-  url 'http://clojure.googlecode.com/files/clojure_1.0.0.zip'
-  head 'git://github.com/richhickey/clojure.git'
+class Clojure < Formula
+  url 'https://github.com/downloads/clojure/clojure/clojure-1.2.1.zip'
+  md5 'c5724c624fd6ce6a1d00252c27d53ebe'
+  head 'https://github.com/clojure/clojure.git'
   homepage 'http://clojure.org/'
-  md5 'e7a50129040df7fe52287006988ecbb2'
-  JAR = "clojure-1.0.0.jar"
+
+  def script; <<-EOS.undent
+    #!/bin/sh
+    # Clojure wrapper script.
+    # With no arguments runs Clojure's REPL.
+
+    # Put the Clojure jar from the cellar and the current folder in the classpath.
+    CLOJURE=$CLASSPATH:#{prefix}/clojure.jar:${PWD}
+
+    if [ "$#" -eq 0 ]; then
+        java -cp $CLOJURE clojure.main --repl
+    else
+        java -cp $CLOJURE clojure.main "$@"
+    fi
+    EOS
+  end
 
   def install
-    prefix.install JAR
+    system "ant" if ARGV.build_head?
+    prefix.install 'clojure.jar'
+    (prefix+'classes').mkpath
+    (bin+'clj').write script
+  end
 
-    # create helpful scripts to start clojure
-    bin.mkdir
-    clojure_exec = bin + 'clj'
+  def caveats; <<-EOS.undent
+    If you `brew install repl` then you may find this wrapper script from
+    MacPorts useful:
+      http://trac.macports.org/browser/trunk/dports/lang/clojure/files/clj-rlwrap.sh?format=txt
+    EOS
+  end
 
-    script = DATA.read
-    script.sub! "CLOJURE_JAR_PATH_PLACEHOLDER", "#{prefix}/#{JAR}"
-
-    clojure_exec.write script
-
-    File.chmod(0755, clojure_exec)
+  def test
+    system "clj -e \"(println \\\"Hello World\\\")\""
   end
 end
-
-__END__
-#!/bin/bash
-# Runs clojure.
-# With no arguments, runs Clojure's REPL.
-# With one or more arguments, the first is treated as a script name, the rest
-# passed as command-line arguments.
-
-# resolve links - $0 may be a softlink
-CLOJURE=$CLASSPATH:CLOJURE_JAR_PATH_PLACEHOLDER
-
-if [ -z "$1" ]; then
-	java -server -cp $CLOJURE clojure.lang.Repl
-else
-	scriptname=$1
-	java -server -cp $CLOJURE clojure.lang.Script $scriptname -- $*
-fi

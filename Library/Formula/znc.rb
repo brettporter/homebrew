@@ -1,23 +1,31 @@
 require 'formula'
 
-class Znc <Formula
-  url 'http://downloads.sourceforge.net/project/znc/znc/0.076/znc-0.076.tar.gz'
+class Znc < Formula
+  url 'http://znc.in/releases/archive/znc-0.098.tar.gz'
+  md5 '5667b4acb1f01309d6eded77abac700c'
   homepage 'http://en.znc.in/wiki/ZNC'
-  md5 '03c2804b91225e83884f06078f6db568'
+  head 'https://github.com/znc/znc.git'
 
-  depends_on 'c-ares'
-  depends_on 'pkg-config' => :optional
+  depends_on 'pkg-config' => :build
+  depends_on 'c-ares' => :optional
 
   skip_clean 'bin/znc'
+  skip_clean 'bin/znc-config'
+  skip_clean 'bin/znc-buildmod'
+
+  def options
+    [['--enable-debug', "Compile ZNC with --enable-debug"]]
+  end
 
   def install
-    # This is a 3rd-party module that handles push notifications for Colloquy on the iPhone
-    # it's off by default, but annoying to compile if you don't do it while the source is available
-    system "curl -Ls -o modules/colloquy.cpp http://github.com/wired/colloquypush/raw/e678ca8ba9b3515dc8bfabeb7a6f258e6b8665e8/znc/colloquy.cpp"
+    if ARGV.build_head?
+      ENV['ACLOCAL_FLAGS'] = "--acdir=#{HOMEBREW_PREFIX}/share/aclocal"
+      system "./autogen.sh"
+    end
 
-    # Apparently Snow Leopard's libperl is at /System/Library/Perl/lib/5.10/libperl.dylib
-    # but I don't know how to tell znc that. Perl is only used for user plugins, anyway.
-    system "./configure", "--prefix=#{prefix}", "--enable-extra", "--disable-perl"
+    args = ["--prefix=#{prefix}", "--enable-extra"]
+    args << "--enable-debug" if ARGV.include? '--enable-debug'
+    system "./configure", *args
     system "make install"
   end
 end

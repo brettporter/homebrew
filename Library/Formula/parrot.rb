@@ -1,20 +1,21 @@
 require 'formula'
 
-class Parrot <Formula
-  url 'ftp://ftp.parrot.org//pub/parrot/releases/devel/1.6.0/parrot-1.6.0.tar.gz'
+class Parrot < Formula
+  head 'https://github.com/parrot/parrot.git'
+  url 'ftp://ftp.parrot.org/pub/parrot/releases/supported/3.6.0/parrot-3.6.0.tar.bz2'
+  sha256 'a6ae5c4a1af3602043d1139a12ae9d4dfe2dd000250b1a76fc339bf4a004f8c7'
   homepage 'http://www.parrot.org/'
-  md5 '6fde2d91278a3990213c8671a0856e4a'
 
-  depends_on 'pcre'
+  depends_on 'gmp' => :optional
+  depends_on 'icu4c' => :optional
+  depends_on 'pcre' => :optional
 
   def install
-    system "perl Configure.pl --prefix=#{prefix} --debugging=0 --without-opengl --cc=#{ENV['CC']}"
-    system "make install"
+    system "perl", "Configure.pl", "--prefix=#{prefix}",
+                                   "--debugging=0",
+                                   "--cc=#{ENV.cc}"
 
-    h = "#{HOMEBREW_PREFIX}/Cellar/parrot/1.6.0/bin/"
-    l = %x{otool -L #{h}parrot}[/\S*blib\/lib\S*/]
-    %w{parrot parrot_config parrot_debugger}.each do |f|
-      system "install_name_tool -change #{l} #{HOMEBREW_PREFIX}/lib/libparrot.dylib #{h}#{f}"
-    end
+    system "make"
+    system "make install"
   end
 end

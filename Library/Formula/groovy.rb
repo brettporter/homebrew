@@ -1,13 +1,27 @@
 require 'formula'
 
-class Groovy <Formula
-  @url='http://dist.groovy.codehaus.org/distributions/groovy-binary-1.6.5.zip'
-  @homepage='http://groovy.codehaus.org/'
-  @version='1.6.5'
-  @sha256='db3d4c08ad76392ae94eba830e8c9072fda9e5774c9e7d220c90d0f91a5d7aaf'
+class Groovy < Formula
+  homepage 'http://groovy.codehaus.org/'
+  url 'http://dist.groovy.codehaus.org/distributions/groovy-binary-1.8.1.zip'
+  sha1 'd2293d9ae5a418550ab6d9f70934cce49970fd3c'
 
   def install
-    prefix.install %w[bin conf lib]
-    FileUtils.rm_f Dir["#{bin}/*.bat"]
+    rm_f Dir["bin/*.bat"]
+
+    prefix.install %w{ LICENSE.txt NOTICE.txt }
+    libexec.install %w[bin conf lib]
+
+    bin.mkpath
+    Dir["#{libexec}/bin/*"].each do |f|
+      next unless File.extname(f).empty?
+      ln_s f, bin+File.basename(f)
+    end
+  end
+
+  def caveats
+    <<-EOS.undent
+      You should set the environment variable GROOVY_HOME to
+        #{libexec}
+    EOS
   end
 end
